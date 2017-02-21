@@ -1,0 +1,103 @@
+package com.binaryoptions.core.service;
+
+import com.binaryoptions.core.exception.management.EntityNotFoundException;
+import com.binaryoptions.core.persistence.jpa.entity.BaseEntity;
+import com.binaryoptions.core.persistence.jpa.entity.user.User;
+import com.binaryoptions.core.service.company.preferences.BasePreferenceService;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.common.exceptions.UnauthorizedUserException;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
+
+public class BasePreferencesController<ENTITY extends BaseEntity> {
+
+    protected static final Logger LOGGER = LogManager.getLogger(BasePreferencesController.class);
+
+    @Autowired
+    protected BasePreferenceService<ENTITY> basePreferenceService;
+
+    @RequestMapping(method = RequestMethod.POST, value = "/add")
+    public ENTITY add(@RequestBody ENTITY companyPreference) {
+        validate(companyPreference);
+        ENTITY saved = basePreferenceService.add(companyPreference);
+        LOGGER.info(String.format("%s saved successfully", saved));
+        return saved;
+    }
+
+    protected void validate(ENTITY companyPreference) {
+    }
+
+    @RequestMapping(method = RequestMethod.PUT, value = "/{id}")
+    public ENTITY update(@RequestBody ENTITY newCompanyPreference, @PathVariable Long id) {
+        validate(newCompanyPreference);
+        ENTITY companyPreferenceFromDb = basePreferenceService.get(id);
+        isEntityNull(id, companyPreferenceFromDb);
+        newCompanyPreference.setId(id);
+        companyPreferenceFromDb = basePreferenceService.update(newCompanyPreference);
+        LOGGER.info(String.format("%s saved successfully", companyPreferenceFromDb));
+        return companyPreferenceFromDb;
+    }
+
+    @RequestMapping(method = RequestMethod.GET, value = "/{id}")
+    public ENTITY get(@PathVariable Long id) {
+        ENTITY companyPreferenceFromDb = basePreferenceService.get(id);
+        isEntityNull(id, companyPreferenceFromDb);
+        LOGGER.info("Entity: " + companyPreferenceFromDb);
+        return companyPreferenceFromDb;
+    }
+
+    @RequestMapping(method = RequestMethod.DELETE, value = "/{id}")
+    public ENTITY delete(@PathVariable Long id) {
+        ENTITY forDelete = basePreferenceService.get(id);
+        LOGGER.info("Entity to remove: " + forDelete);
+        if (forDelete == null) {
+            LOGGER.info("HTTP Status code " + HttpStatus.NOT_FOUND);
+            throw new EntityNotFoundException(String.format("Not find entity with number %s", id));
+        }
+        forDelete.setDeleted(true);
+        basePreferenceService.update(forDelete);
+        return forDelete;
+    }
+
+    @RequestMapping(method = RequestMethod.GET, value = "/show")
+    public Page<ENTITY> getAll(@RequestParam(required = false) Integer page,
+                               @RequestParam(required = false) Integer size) {
+        Page<ENTITY> entities = basePreferenceService.findByDeletedFalse(new PageRequest(defaultIfNull(page, 0), defaultIfNull(size, 20)));
+        LOGGER.info("Entity: " + entities);
+        return entities;
+    }
+
+    @RequestMapping(method = RequestMethod.GET, value = "/list")
+    public List<ENTITY> get() {
+        List<ENTITY> entities = basePreferenceService.findByDeletedFalse();
+        LOGGER.info("Entity: " + entities);
+        return entities;
+    }
+
+    protected User getAuth() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth instanceof AnonymousAuthenticationToken) {
+            throw new UnauthorizedUserException("User token doesn't exists");
+        }
+        return (User) auth.getPrincipal();
+    }
+
+    private void isEntityNull(@PathVariable Long id, ENTITY entity) {
+        if (entity == null) {
+            LOGGER.info("HTTP Status code " + HttpStatus.NOT_FOUND);
+            throw new EntityNotFoundException(String.format("Not find entity with number %s", id));
+        }
+    }
+
+}
