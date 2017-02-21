@@ -1,0 +1,89 @@
+package com.binaryoptions.management.api;
+
+import com.binaryoptions.core.persistence.jpa.entity.company.Country;
+import com.binaryoptions.core.service.BasePreferencesController;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.regex.Pattern;
+
+import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
+
+@RestController
+@RequestMapping("/api/country")
+public class CountryController extends BasePreferencesController<Country> {
+
+    private static final Pattern LETTERS_ONLY_PATTERN = Pattern.compile("^[\\p{L} .'-]+$");
+
+    private static final Pattern CAPITAL_LETTERS_ONLY_PATTERN = Pattern.compile("^[A-Z]+$");
+
+    public static final int ENTITIES_PER_PAGE = 20;
+
+    @Override
+    public Page<Country> getAll(@RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
+        Page<Country> entities = basePreferenceService.findByDeletedFalseOrderByName(new PageRequest(defaultIfNull(page, 0), defaultIfNull(size, ENTITIES_PER_PAGE)));
+        LOGGER.info("Entity: " + entities);
+        return entities;
+    }
+
+    @RequestMapping(method = RequestMethod.POST)
+    public Page<Country> createCountry(@RequestBody Country country) {
+        Country addedCountry = this.basePreferenceService.add(country);
+
+        long countriesNumber = this.basePreferenceService.count();
+        int page = 0;
+
+        for (int startIndex = 0; startIndex <= countriesNumber; startIndex += ENTITIES_PER_PAGE) {
+            Page<Country> entities = this.basePreferenceService.findByDeletedFalseOrderByName(new PageRequest(page, ENTITIES_PER_PAGE));
+
+            if (entities.getContent().contains(addedCountry)) {
+                return entities;
+            }
+
+            page++;
+        }
+
+        return null;
+    }
+
+    @Override
+    protected void validate(Country country) {
+        super.validate(country);
+
+        validateNameField(country.getName());
+        validateIso2CodeField(country.getIso2Code());
+        validateIso3CodeField(country.getIso3Code());
+    }
+
+    private void validateIso3CodeField(String iso3Code) {
+        if (StringUtils.isEmpty(iso3Code)) {
+            throw new IllegalArgumentException("Iso3Code cannot be empty");
+        } else if (!CAPITAL_LETTERS_ONLY_PATTERN.matcher(iso3Code).matches()) {
+            throw new IllegalArgumentException("Iso3Code should contain capital letters only");
+        } else if (iso3Code.length() != 3) {
+            throw new IllegalArgumentException("Iso3Code length should be 3 characters");
+        }
+    }
+
+    private void validateIso2CodeField(String iso2Code) {
+        if (StringUtils.isEmpty(iso2Code)) {
+            throw new IllegalArgumentException("Iso2Code cannot be empty");
+        } else if (!CAPITAL_LETTERS_ONLY_PATTERN.matcher(iso2Code).matches()) {
+            throw new IllegalArgumentException("Iso2Code should contain capital letters only");
+        } else if (iso2Code.length() != 2) {
+            throw new IllegalArgumentException("Iso2Code length should be 2 characters");
+        }
+    }
+
+    private void validateNameField(String name) {
+        if (StringUtils.isEmpty(name)) {
+            throw new IllegalArgumentException("Name cannot be empty");
+        } else if (!LETTERS_ONLY_PATTERN.matcher(name).matches()) {
+            throw new IllegalArgumentException("Name should contain letters only");
+        } else if (name.length() < 3) {
+            throw new IllegalArgumentException("Name length should be more than 2 characters");
+        }
+    }
+}
